@@ -8,8 +8,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/sio1212/jenkins_terraofrom.git
-'
+                git branch: 'main', url: 'https://github.com/sio1212/jenkins_terraofrom.git'
             }
         }
 
