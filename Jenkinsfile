@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git credentialsId: 'AKIA34AMC44EMQFTQWQH', branch: 'main', url: 'https://github.com/sio1212/jenkins_terraofrom.git'
+                git credentialsId: 'main', branch: 'main', url: 'https://github.com/sio1212/jenkins_terraofrom.git'
             }
         }
 
