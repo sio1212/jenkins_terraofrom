@@ -2,9 +2,7 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = "ap-northeast-2"  // 원하는 리전
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')  // AWS 자격 증명 ID
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')  // AWS 비밀 키
+        AWS_REGION = "ap-northeast-2"
     }
 
     stages {
