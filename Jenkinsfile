@@ -1,32 +1,46 @@
 pipeline {
     agent any
 
-    environment {
-        AWS_REGION = "ap-northeast-2"
+    parameters {
+        string(name: 'environment', defaultValue: 'terraform', description: 'Workspace/environment file to use for deployment')
+        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
+    }
+
+     environment {
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+        REGION = credentials('AWS_REGION')
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Plan') {
+
             steps {
-                git credentialsId: 'main', branch: 'main', url: 'https://github.com/sio1212/jenkins_terraofrom.git'
+                sh 'terraform init -upgrade'
+                sh "terraform validate"
+                sh "terraform plan"
             }
         }
+        stage('Approval') {
+           when {
+               not {
+                   equals expected: true, actual: params.autoApprove
+               }
+           }
+           
+           steps {
+               script {
+                    input message: "Do you want to apply the plan?",
+                    parameters: [text(name: 'Plan', description: 'Please review the plan')]
 
-        stage('Terraform Init') {
-            steps {
-                sh 'terraform init'
-            }
-        }
+               }
+           }
+       }
 
-        stage('Terraform Plan') {
+        stage('Apply') {
             steps {
-                sh 'terraform plan -out=tfplan'
-            }
-        }
-
-        stage('Terraform Apply') {
-            steps {
-                sh 'terraform apply -auto-approve tfplan'
+                sh "terraform apply --auto-approve"
             }
         }
     }
