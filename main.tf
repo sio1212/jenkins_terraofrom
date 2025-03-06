@@ -1,11 +1,10 @@
-provider "aws" {
-  region = "ap-northeast-2" # 원하는 리전으로 변경
-}
+#### VPC ####
 
-resource "aws_vpc" "main_vpc" {
-  cidr_block = "10.0.0.0/16"
+resource "aws_vpc" "vpc-test-jenkins" {
+  cidr_block  = "10.181.130.0/24" # 업뎃 필요
+  enable_dns_hostnames = true
 
   tags = {
-    Name = "my-vpc"
+    Name = "vpc-test-jenkins"
   }
 }
