@@ -16,7 +16,8 @@ pipeline {
         stage('Initialize Terraform') {
             steps {
                 script {
-                    sh 'terraform init'
+                    // terraform init 명령 실행 및 출력 확인
+                    sh 'terraform init -input=false'
                 }
             }
         }
@@ -40,7 +41,7 @@ pipeline {
     
     post {
         always {
-            // 여기에 추가적으로 로그 확인 또는 리소스를 정리하는 작업을 할 수 있음
+            // 추가적으로 로그 확인 또는 리소스 정리 작업을 할 수 있음
         }
     }
 }
