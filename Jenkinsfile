@@ -16,7 +16,7 @@ pipeline {
         stage('Initialize Terraform') {
             steps {
                 script {
-                    // terraform init 명령 실행 및 출력 확인
+                    // terraform init 명령 실행
                     sh 'terraform init -input=false'
                 }
             }
@@ -25,6 +25,7 @@ pipeline {
         stage('Plan Terraform') {
             steps {
                 script {
+                    // terraform plan 명령 실행
                     sh 'terraform plan -out=tfplan'
                 }
             }
@@ -33,6 +34,7 @@ pipeline {
         stage('Apply Terraform') {
             steps {
                 script {
+                    // terraform apply 명령 실행
                     sh 'terraform apply -auto-approve tfplan'
                 }
             }
