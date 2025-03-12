@@ -4,19 +4,20 @@ pipeline {
     environment {
         AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
         AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
-        TF_LOG = 'DEBUG'
+        TF_LOG = 'DEBUG'  // 디버깅을 위한 환경 변수 설정
     }
-    stage('Check Terraform Installation') {
-    steps {
-        script {
-            echo 'Checking Terraform Installation and Version...'
-            sh 'which terraform'  // terraform 경로 확인
-            sh 'terraform --version'  // terraform 버전 확인
-        }
-    }
-}
 
     stages {
+        stage('Check Terraform Installation') {
+            steps {
+                script {
+                    echo 'Checking Terraform Installation and Version...'
+                    sh 'which terraform'  // terraform 경로 확인
+                    sh 'terraform --version'  // terraform 버전 확인
+                }
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 checkout scm
