@@ -6,7 +6,16 @@ pipeline {
         AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
         TF_LOG = 'DEBUG'
     }
-    
+    stage('Check Terraform Installation') {
+    steps {
+        script {
+            echo 'Checking Terraform Installation and Version...'
+            sh 'which terraform'  // terraform 경로 확인
+            sh 'terraform --version'  // terraform 버전 확인
+        }
+    }
+}
+
     stages {
         stage('Checkout') {
             steps {
