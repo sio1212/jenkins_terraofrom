@@ -10,7 +10,7 @@ terraform {
 
 # VPC 생성 예시
 provider "aws" {
-  region = "us-east-1"
+  region = "ap-northeast-2"
 }
 
 resource "aws_vpc" "main" {
