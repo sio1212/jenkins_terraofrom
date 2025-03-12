@@ -18,8 +18,11 @@ pipeline {
             steps {
                 script {
                     echo 'Initializing Terraform...'
-                    // Terraform 경로를 지정하여 terraform init 실행
-                    sh '/usr/bin/terraform init -input=false'  // Terraform 설치 경로를 /usr/bin/terraform로 설정
+                    // 디버깅: Terraform 경로와 상태를 출력
+                    sh 'which terraform'  // terraform 경로 확인
+                    sh 'ls -l /usr/bin/terraform'  // terraform 파일 정보 확인
+                    // terraform init 명령어 실행
+                    sh '/usr/bin/terraform init -input=false'
                 }
             }
         }
@@ -28,8 +31,8 @@ pipeline {
             steps {
                 script {
                     echo 'Planning Terraform...'
-                    // Terraform 경로를 지정하여 terraform plan 실행
-                    sh '/usr/bin/terraform plan -out=tfplan'  // Terraform 설치 경로를 /usr/bin/terraform로 설정
+                    // terraform plan 명령어 실행
+                    sh '/usr/bin/terraform plan -out=tfplan'
                 }
             }
         }
@@ -38,8 +41,8 @@ pipeline {
             steps {
                 script {
                     echo 'Applying Terraform...'
-                    // Terraform 경로를 지정하여 terraform apply 실행
-                    sh '/usr/bin/terraform apply -auto-approve tfplan'  // Terraform 설치 경로를 /usr/bin/terraform로 설정
+                    // terraform apply 명령어 실행
+                    sh '/usr/bin/terraform apply -auto-approve tfplan'
                 }
             }
         }
