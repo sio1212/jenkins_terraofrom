@@ -10,8 +10,17 @@ pipeline {
         AWS_ACCESS_KEY_ID     = credentials('AKIA34AMC44EMQFTQWQH')
         AWS_SECRET_ACCESS_KEY = credentials('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')
         REGION = credentials('ap-northeast-2')
+        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"
     }
-
+     stages {
+            stage('Build') {
+                steps {
+                sh 'echo $PATH'
+                sh 'which terraform'
+                sh 'terraform version'
+                }
+            }
+        }
     stages {
 
         stage('Plan') {
