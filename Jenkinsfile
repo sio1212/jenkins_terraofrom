@@ -48,4 +48,19 @@ pipeline {
         stage('Apply') {
             when {
                 expression { !params.isDestroy }  // destroy가 아니면 apply 실행
-   
+            }
+            steps {
+                sh "terraform apply -auto-approve"
+            }
+        }
+
+        stage('Destroy') {
+            when {
+                expression { params.isDestroy }  // isDestroy가 true일 때 실행
+            }
+            steps {
+                sh "terraform destroy -auto-approve"
+            }
+        }
+    }
+}
