@@ -24,7 +24,7 @@ provider "aws" {
 }
 
 # 예시로 사용할 리소스 (AWS S3 버킷 생성)
-resource "aws_s3_bucket" "my_bucket" {
+resource "aws_s3_bucket" "jgt-terraform-state" {
   bucket = "jgt-terraform-state"  # S3 버킷 이름 (기존에 만든 이름 사용)
   acl    = "private"  # 접근 제어 목록 (ACL) 설정, private으로 설정하여 모든 사람이 접근하지 못하도록 설정
 }
