@@ -31,4 +31,4 @@ terraform {
 #}
 
 #### Remote State Data Source ####
-data "aws_availability_zones" "all" {}
+#data "aws_availability_zones" "all" {}
