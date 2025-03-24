@@ -5,7 +5,7 @@ terraform {
     bucket = "jgt-terraform-state"  # 생성한 S3 버킷 이름
 
     # S3에 상태 파일을 저장할 경로 (디렉토리 경로 + 파일 이름)
-    key    = "jgt_project/dev/terraform/state/terraform.tfstate"  # 상태 파일을 저장할 경로
+    key    = "terraform.tfstate"  # 상태 파일을 저장할 경로
 
     # S3 버킷이 위치한 AWS 리전
     region = "ap-northeast-2"  # S3 버킷이 위치한 리전
