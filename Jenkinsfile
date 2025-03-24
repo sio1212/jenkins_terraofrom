@@ -18,8 +18,8 @@ pipeline {
         stage('Plan') {
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {  // AWS Credentials 사용
-                    #sh 'terraform init -upgrade'  // Terraform 초기화 (모듈 및 플러그인 최신화)
-                    sh 'terraform init -reconfigure'  // Terraform 초기화 (모듈 및 플러그인 최신화)
+                    sh 'terraform init -upgrade'  // Terraform 초기화 (모듈 및 플러그인 최신화)
+                    #sh 'terraform init -reconfigure'  // Terraform 초기화 (모듈 및 플러그인 최신화)
                     sh 'terraform validate'  // Terraform 코드 유효성 검사
 
                     if (params.isDestroy) {  
