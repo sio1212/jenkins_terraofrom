@@ -21,10 +21,12 @@ pipeline {
                     sh 'terraform init -upgrade'  
                     sh 'terraform validate'  
 
-                    if (params.isDestroy) {  
-                        sh 'terraform plan -destroy'  
-                    } else {
-                        sh 'terraform plan -out=tfplan'  
+                    script {  // ✅ `script {}` 블록 안에서 `if` 문 사용
+                        if (params.isDestroy) {  
+                            sh 'terraform plan -destroy'  
+                        } else {
+                            sh 'terraform plan -out=tfplan'  
+                        }
                     }
                 }
             }
