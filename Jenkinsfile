@@ -1,74 +1,81 @@
 pipeline {
-    agent any  // 모든 Jenkins 실행 노드에서 실행 가능하도록 설정
+    agent any  
 
-    // 🔹 Jenkins Job 실행 시 선택할 수 있는 파라미터 정의
     parameters {
-        booleanParam(name: 'isDestroy', defaultValue: false, description: 'Set true to perform terraform destroy')  // Terraform destroy 여부 결정
-        string(name: 'awsRegion', defaultValue: 'ap-northeast-2', description: 'AWS Region for deployment')  // AWS 배포 리전 설정
+        booleanParam(name: 'isDestroy', defaultValue: false, description: 'Set true to perform terraform destroy')  
+        string(name: 'awsRegion', defaultValue: 'ap-northeast-2', description: 'AWS Region for deployment')  
+        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically apply changes without approval')  
     }
 
-    // 🔹 환경 변수 설정 (Terraform 실행 환경)
     environment {
-        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"  // Terraform 실행을 위한 PATH 설정
-        AWS_REGION = "${params.awsRegion}"  // Jenkins Job 실행 시 AWS 리전 선택 가능하도록 설정
+        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"  
+        AWS_REGION = "${params.awsRegion}"  
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
     }
 
     stages {
-        // 📌 1️⃣ Terraform Plan 단계 (실행 계획 확인)
         stage('Plan') {
             steps {
-                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {  // AWS Credentials 사용
-                    sh 'terraform init -upgrade'  // Terraform 초기화 (모듈 및 플러그인 최신화)
-                    #sh 'terraform init -reconfigure'  // Terraform 초기화 (모듈 및 플러그인 최신화)
-                    sh 'terraform validate'  // Terraform 코드 유효성 검사
+                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {  
+                    sh 'terraform init -upgrade'  
+                    sh 'terraform validate'  
 
                     if (params.isDestroy) {  
-                        sh 'terraform plan -destroy'  // 🔥 Destroy 모드일 경우 `plan -destroy` 실행
+                        sh 'terraform plan -destroy'  
                     } else {
-                        sh 'terraform plan'  // 🛠 일반적인 Apply 모드에서는 `plan` 실행
+                        sh 'terraform plan'  
                     }
                 }
             }
         }
 
-         stage('Drift Check') {
-                    steps {
-                        sh '''
-                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json > drift_report.json
-                        '''
-                    }
-                }
-                
-        // 📌 2️⃣ 사용자 승인 단계 (autoApprove가 false일 때만 실행)
-        stage('Approval') {
-            when { not { equals expected: true, actual: params.autoApprove } }  // autoApprove가 false일 경우만 실행
+        stage('Drift Check') {
             steps {
                 script {
-                    input message: "Do you want to apply or destroy the plan?",  // 사용자에게 실행 여부 확인 요청
-                          parameters: [text(name: 'Plan', description: 'Please review the plan')]
+                    def driftStatus = sh(script: '''
+                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json > drift_report.json
+                        jq '.summary' drift_report.json
+                    ''', returnStdout: true).trim()
+
+                    echo "Drift Check Summary: ${driftStatus}"
+
+                    if (driftStatus.contains('"total_changed": 0') && driftStatus.contains('"total_missing": 0') && driftStatus.contains('"total_unmanaged": 0')) {
+                        echo "✅ No drift detected. Proceeding with deployment."
+                    } else {
+                        echo "⚠️ Drift detected! Manual approval required."
+                        currentBuild.result = 'UNSTABLE'
+                    }
                 }
             }
         }
 
-        // 📌 3️⃣ Apply 단계 (isDestroy가 false일 경우 실행)
+        stage('Approval') {
+            when { 
+                expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
+            }
+            steps {
+                script {
+                    input message: "Drift detected! Review and approve before proceeding.",  
+                          parameters: [text(name: 'Review', description: 'Please review the drift report and confirm.')]
+                }
+            }
+        }
+
         stage('Apply') {
-            when { expression { !params.isDestroy } }  // isDestroy가 false일 때만 실행 (일반적인 배포)
+            when { expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') } }  
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                   // sh "terraform apply -auto-approve"  // Terraform Apply 실행 (자동 승인)
-                    sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve"  // Terraform Apply 실행 (실행시간 없애기)
+                    sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve"
                 }
             }
         }
 
-        // 📌 4️⃣ Destroy 단계 (isDestroy가 true일 경우 실행)
         stage('Destroy') {
-            when { expression { params.isDestroy } }  // isDestroy가 true일 때만 실행 (리소스 삭제)
+            when { expression { params.isDestroy } }  
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    sh "terraform destroy -auto-approve"  // Terraform Destroy 실행 (자동 승인)
+                    sh "terraform destroy -auto-approve"
                 }
             }
         }
