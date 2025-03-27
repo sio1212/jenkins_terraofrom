@@ -11,6 +11,8 @@ pipeline {
     environment {
         PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"  // Terraform 실행을 위한 PATH 설정
         AWS_REGION = "${params.awsRegion}"  // Jenkins Job 실행 시 AWS 리전 선택 가능하도록 설정
+        S3_BUCKET = "jgt-terraform-state"
+        TF_STATE_KEY = "demo/terraform.tfstate"
     }
 
     stages {
@@ -31,6 +33,14 @@ pipeline {
             }
         }
 
+         stage('Drift Check') {
+                    steps {
+                        sh '''
+                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json > drift_report.json
+                        '''
+                    }
+                }
+                
         // 📌 2️⃣ 사용자 승인 단계 (autoApprove가 false일 때만 실행)
         stage('Approval') {
             when { not { equals expected: true, actual: params.autoApprove } }  // autoApprove가 false일 경우만 실행
