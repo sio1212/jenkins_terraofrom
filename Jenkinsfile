@@ -24,7 +24,7 @@ pipeline {
                     if (params.isDestroy) {  
                         sh 'terraform plan -destroy'  
                     } else {
-                        sh 'terraform plan'  
+                        sh 'terraform plan -out=tfplan'  
                     }
                 }
             }
@@ -33,14 +33,21 @@ pipeline {
         stage('Drift Check') {
             steps {
                 script {
-                    def driftStatus = sh(script: '''
+                    def driftResult = sh(script: '''
+                        set +e
                         driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json > drift_report.json
+                        DRIFT_STATUS=$?
+                        if [ $DRIFT_STATUS -ne 0 ]; then
+                            echo "🚨 Driftctl 실행 오류 발생! 배포 중지"
+                            exit 1
+                        fi
+                        set -e
                         jq '.summary' drift_report.json
                     ''', returnStdout: true).trim()
 
-                    echo "Drift Check Summary: ${driftStatus}"
+                    echo "Drift Check Summary: ${driftResult}"
 
-                    if (driftStatus.contains('"total_changed": 0') && driftStatus.contains('"total_missing": 0') && driftStatus.contains('"total_unmanaged": 0')) {
+                    if (driftResult.contains('"total_changed": 0') && driftResult.contains('"total_missing": 0') && driftResult.contains('"total_unmanaged": 0')) {
                         echo "✅ No drift detected. Proceeding with deployment."
                     } else {
                         echo "⚠️ Drift detected! Manual approval required."
@@ -56,8 +63,16 @@ pipeline {
             }
             steps {
                 script {
-                    input message: "Drift detected! Review and approve before proceeding.",  
-                          parameters: [text(name: 'Review', description: 'Please review the drift report and confirm.')]
+                    def userInput = input message: "Drift detected! Review and approve before proceeding.",  
+                          parameters: [
+                              choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform Apply 실행 여부')
+                          ]
+                    
+                    if (userInput == '거절') {
+                        error("🚨 사용자가 배포를 거절했습니다. 종료합니다.")
+                    } else {
+                        echo "✅ 승인 완료! Terraform Apply 진행"
+                    }
                 }
             }
         }
