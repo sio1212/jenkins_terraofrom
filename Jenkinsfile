@@ -58,6 +58,7 @@ pipeline {
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     sh "terraform apply -auto-approve"  // Terraform Apply 실행 (자동 승인)
+                    sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve"  // Terraform Apply 실행 (실행시간 없애기)
                 }
             }
         }
