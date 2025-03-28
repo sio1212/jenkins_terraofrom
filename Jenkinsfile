@@ -100,4 +100,12 @@ pipeline {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
                         echo "Destroying Terraform resources..."
-                        retry(3) {  // 3번
+                        retry(3) {  // 3번 재시도
+                            sh "terraform destroy -auto-approve"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
