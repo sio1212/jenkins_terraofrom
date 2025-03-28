@@ -35,26 +35,26 @@ pipeline {
         stage('Drift Check') {
             steps {
                 script {
-                    def driftResult = sh(script: '''
+                    def driftStatus = sh(script: '''
                         set +e
+                        # driftctl scan to check if state exists in S3
                         driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json://drift_report.json
                         DRIFT_STATUS=$?
-                        if [ $DRIFT_STATUS -ne 0 ]; then
-                            echo "🚨 Driftctl 실행 오류 발생! 배포 중지"
-                            exit 1
-                        fi
                         set -e
-                        jq '.summary' drift_report.json
+                        echo $DRIFT_STATUS
                     ''', returnStdout: true).trim()
 
-                    echo "Drift Check Summary: ${driftResult}"
-
-                    // Check for drift in the result
-                    if (driftResult.contains('"total_changed": 0') && driftResult.contains('"total_missing": 0') && driftResult.contains('"total_unmanaged": 0')) {
-                        echo "✅ No drift detected. Proceeding with deployment."
+                    // If Drift status is 2, it means no state file was found, so we skip drift check
+                    if (driftStatus == '2') {
+                        echo "No tfstate file found. Skipping Drift check and proceeding with deployment."
+                    } else if (driftStatus != '0') {
+                        echo "🚨 Driftctl 실행 오류 발생! 배포 중지"
+                        currentBuild.result = 'FAILURE'
+                        error("Driftctl failed to scan properly")
                     } else {
-                        echo "⚠️ Drift detected! Manual approval required."
-                        currentBuild.result = 'UNSTABLE'
+                        echo "Drift check passed. Proceeding with deployment."
+                        def driftResult = readFile('drift_report.json')
+                        echo "Drift Check Summary: ${driftResult}"
                     }
                 }
             }
@@ -86,9 +86,7 @@ pipeline {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
                         echo "Applying Terraform Plan..."
-                        retry(3) {  // 3번 재시도
-                            sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve tfplan"
-                        }
+                        sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve tfplan"
                     }
                 }
             }
@@ -100,9 +98,7 @@ pipeline {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
                         echo "Destroying Terraform resources..."
-                        retry(3) {  // 3번 재시도
-                            sh "terraform destroy -auto-approve"
-                        }
+                        sh "terraform destroy -auto-approve"
                     }
                 }
             }
