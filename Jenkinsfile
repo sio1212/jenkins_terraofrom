@@ -86,7 +86,9 @@ pipeline {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
                         echo "Applying Terraform Plan..."
-                        sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve tfplan"
+                        retry(3) {  // 3번 재시도
+                            sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve tfplan"
+                        }
                     }
                 }
             }
@@ -98,10 +100,4 @@ pipeline {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
                         echo "Destroying Terraform resources..."
-                        sh "terraform destroy -auto-approve"
-                    }
-                }
-            }
-        }
-    }
-}
+                        retry(3) {  // 3번
