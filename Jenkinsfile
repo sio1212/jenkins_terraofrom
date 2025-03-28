@@ -21,9 +21,9 @@ pipeline {
                     sh 'terraform init -upgrade'  
                     sh 'terraform validate'  
 
-                    script {  // ✅ `script {}` 블록 안에서 `if` 문 사용
+                    script {  
                         if (params.isDestroy) {  
-                            sh 'terraform plan -destroy'  
+                            sh 'terraform plan -destroy -out=tfplan'  
                         } else {
                             sh 'terraform plan -out=tfplan'  
                         }
@@ -37,7 +37,7 @@ pipeline {
                 script {
                     def driftResult = sh(script: '''
                         set +e
-                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json > drift_report.json
+                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json://drift_report.json
                         DRIFT_STATUS=$?
                         if [ $DRIFT_STATUS -ne 0 ]; then
                             echo "🚨 Driftctl 실행 오류 발생! 배포 중지"
@@ -49,6 +49,7 @@ pipeline {
 
                     echo "Drift Check Summary: ${driftResult}"
 
+                    // Check for drift in the result
                     if (driftResult.contains('"total_changed": 0') && driftResult.contains('"total_missing": 0') && driftResult.contains('"total_unmanaged": 0')) {
                         echo "✅ No drift detected. Proceeding with deployment."
                     } else {
@@ -83,7 +84,10 @@ pipeline {
             when { expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') } }  
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve"
+                    script {
+                        echo "Applying Terraform Plan..."
+                        sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve tfplan"
+                    }
                 }
             }
         }
@@ -92,7 +96,10 @@ pipeline {
             when { expression { params.isDestroy } }  
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    sh "terraform destroy -auto-approve"
+                    script {
+                        echo "Destroying Terraform resources..."
+                        sh "terraform destroy -auto-approve"
+                    }
                 }
             }
         }
