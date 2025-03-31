@@ -1,0 +1,9 @@
+version: 3
+projects:
+  - name: my-terraform-project
+    dir: ./terraform # Terraform 파일이 위치한 디렉토리
+    terraform_version: 1.0.0
+    workspace: default
+    autoplan:
+      when_modified: true
+      enabled: true
