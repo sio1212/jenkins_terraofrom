@@ -1,15 +1,15 @@
 pipeline {
-    agent any  
+    agent any
 
     parameters {
-        booleanParam(name: 'isDestroy', defaultValue: false, description: 'Set true to perform terraform destroy')  
-        string(name: 'awsRegion', defaultValue: 'ap-northeast-2', description: 'AWS Region for deployment')  
-        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically apply changes without approval')  
+        booleanParam(name: 'isDestroy', defaultValue: false, description: 'Set true to perform terraform destroy')
+        string(name: 'awsRegion', defaultValue: 'ap-northeast-2', description: 'AWS Region for deployment')
+        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically apply changes without approval')
     }
 
     environment {
-        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"  
-        AWS_REGION = "${params.awsRegion}"  
+        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"
+        AWS_REGION = "${params.awsRegion}"
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
     }
@@ -17,15 +17,14 @@ pipeline {
     stages {
         stage('Plan') {
             steps {
-                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {  
-                    sh 'terraform init -upgrade'  
-                    sh 'terraform validate'  
-
-                    script {  
-                        if (params.isDestroy) {  
-                            sh 'terraform plan -destroy -out=tfplan'  
+                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
+                    script {
+                        sh 'terraform init -upgrade'
+                        sh 'terraform validate'
+                        if (params.isDestroy) {
+                            sh 'terraform plan -destroy -out=tfplan'
                         } else {
-                            sh 'terraform plan -out=tfplan'  
+                            sh 'terraform plan -out=tfplan'
                         }
                     }
                 }
@@ -37,40 +36,35 @@ pipeline {
                 script {
                     def driftStatus = sh(script: '''
                         set +e
-                        # driftctl scan to check if state exists in S3
                         driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json://drift_report.json
                         DRIFT_STATUS=$?
                         set -e
                         echo $DRIFT_STATUS
                     ''', returnStdout: true).trim()
 
-                    // If Drift status is 2, it means no state file was found, so we skip drift check
                     if (driftStatus == '2') {
                         echo "No tfstate file found. Skipping Drift check and proceeding with deployment."
                     } else if (driftStatus != '0') {
-                        echo "🚨 Driftctl 실행 오류 발생! 배포 중지"
+                        echo "🚨 Driftctl execution error! Stopping deployment."
                         currentBuild.result = 'FAILURE'
                         error("Driftctl failed to scan properly")
                     } else {
                         echo "Drift check passed. Proceeding with deployment."
-                        def driftResult = readFile('drift_report.json')
-                        echo "Drift Check Summary: ${driftResult}"
                     }
                 }
             }
         }
 
         stage('Approval') {
-            when { 
+            when {
                 expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
             }
             steps {
                 script {
-                    def userInput = input message: "Drift detected! Review and approve before proceeding.",  
+                    def userInput = input message: "Drift detected! Review and approve before proceeding.",
                           parameters: [
                               choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform Apply 실행 여부')
                           ]
-                    
                     if (userInput == '거절') {
                         error("🚨 사용자가 배포를 거절했습니다. 종료합니다.")
                     } else {
@@ -81,19 +75,25 @@ pipeline {
         }
 
         stage('Apply') {
-            when { expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') } }  
+            when {
+                expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') }
+            }
             steps {
-                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    script {
-                        echo "Applying Terraform Plan..."
-                        sh "TF_IN_AUTOMATION=1 terraform apply -auto-approve tfplan"
-                    }
+                script {
+                    echo "Applying Terraform Plan..."
+                    // Apply job trigger to a separate job or script
+                    build job: 'terraform-apply-job', parameters: [
+                        string(name: 'awsRegion', value: params.awsRegion),
+                        booleanParam(name: 'isDestroy', value: params.isDestroy)
+                    ]
                 }
             }
         }
 
         stage('Destroy') {
-            when { expression { params.isDestroy } }  
+            when {
+                expression { params.isDestroy }
+            }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
