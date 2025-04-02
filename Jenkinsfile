@@ -21,9 +21,9 @@ pipeline {
                     script {
                         sh 'terraform init -upgrade'
                         sh 'terraform validate'
-                        def planOutput = sh(script: 'terraform plan -out=tfplan', returnStatus: true)
+                        def planOutput = sh(script: 'terraform plan -out=tfplan; echo $? ', returnStdout: true).trim()
                         
-                        if (planOutput != 0) {
+                        if (planOutput != '0') {
                             echo "🚨 Terraform Plan 단계에서 변경 사항 감지됨! 승인 필요"
                             currentBuild.result = 'UNSTABLE'
                         } else {
