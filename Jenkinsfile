@@ -21,10 +21,13 @@ pipeline {
                     script {
                         sh 'terraform init -upgrade'
                         sh 'terraform validate'
-                        if (params.isDestroy) {
-                            sh 'terraform plan -destroy -out=tfplan'
+                        def planOutput = sh(script: 'terraform plan -out=tfplan', returnStatus: true)
+                        
+                        if (planOutput != 0) {
+                            echo "🚨 Terraform Plan 단계에서 변경 사항 감지됨! 승인 필요"
+                            currentBuild.result = 'UNSTABLE'
                         } else {
-                            sh 'terraform plan -out=tfplan'
+                            echo "✅ 변경 사항 없음. 바로 진행 가능"
                         }
                     }
                 }
@@ -37,7 +40,7 @@ pipeline {
             }
             steps {
                 script {
-                    def userInput = input message: "Review and approve before proceeding.",
+                    def userInput = input message: "Terraform Plan 결과를 확인하고 승인하세요.",
                           parameters: [
                               choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform Apply 실행 여부')
                           ]
