@@ -31,37 +31,13 @@ pipeline {
             }
         }
 
-        stage('Drift Check') {
-            steps {
-                script {
-                    def driftStatus = sh(script: '''
-                        set +e
-                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json://drift_report.json
-                        DRIFT_STATUS=$?
-                        set -e
-                        echo $DRIFT_STATUS
-                    ''', returnStdout: true).trim()
-
-                    if (driftStatus == '2') {
-                        echo "No tfstate file found. Skipping Drift check and proceeding with deployment."
-                    } else if (driftStatus != '0') {
-                        echo "🚨 Driftctl execution error! Stopping deployment."
-                        currentBuild.result = 'FAILURE'
-                        error("Driftctl failed to scan properly")
-                    } else {
-                        echo "Drift check passed. Proceeding with deployment."
-                    }
-                }
-            }
-        }
-
         stage('Approval') {
             when {
                 expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
             }
             steps {
                 script {
-                    def userInput = input message: "Drift detected! Review and approve before proceeding.",
+                    def userInput = input message: "Review and approve before proceeding.",
                           parameters: [
                               choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform Apply 실행 여부')
                           ]
@@ -81,7 +57,6 @@ pipeline {
             steps {
                 script {
                     echo "Applying Terraform Plan..."
-                    // Apply job trigger to a separate job or script
                     build job: 'terraform-apply-job', parameters: [
                         string(name: 'awsRegion', value: params.awsRegion),
                         booleanParam(name: 'isDestroy', value: params.isDestroy)
