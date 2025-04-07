@@ -12,10 +12,11 @@ pipeline {
         AWS_REGION = "${params.awsRegion}"  
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
-        SLACK_WEBHOOK_URL = credentials('slack-webhook-url')  // Jenkins Credentials
+        SLACK_WEBHOOK_URL = credentials('slack-webhook-url')
     }
 
     stages {
+
         stage('Plan') {
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {  
@@ -42,6 +43,8 @@ pipeline {
             }
             steps {
                 script {
+                    def inputUrl = "${env.BUILD_URL}input"
+
                     def message = """
                     {
                         "blocks": [
@@ -62,7 +65,7 @@ pipeline {
                                             "text": "배포 승인"
                                         },
                                         "style": "primary",
-                                        "url": "http://43.203.232.137:8080/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/input"
+                                        "url": "${inputUrl}"
                                     },
                                     {
                                         "type": "button",
@@ -71,19 +74,17 @@ pipeline {
                                             "text": "배포 거절"
                                         },
                                         "style": "danger",
-                                        "url": "http://43.203.232.137:8080/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/input"
+                                        "url": "${inputUrl}"
                                     }
                                 ]
                             }
                         ]
                     }
                     """
-                    
-                    sh """
-                        curl -X POST -H 'Content-type: application/json' --data '${message}' ${SLACK_WEBHOOK_URL}
-                    """
 
-                    input message: "Slack에서 배포 승인을 눌러주세요"  
+                    sendSlackMessage(message)
+
+                    input message: "Slack에서 배포 승인을 눌러주세요"
                 }
             }
         }
@@ -108,4 +109,27 @@ pipeline {
             }
         }
     }
+
+    post {
+        success {
+            script {
+                sendSlackMessage("""
+                { "text": "*Terraform 배포 성공* :rocket:\\nJob: ${env.JOB_NAME} #${env.BUILD_NUMBER}" }
+                """)
+            }
+        }
+        failure {
+            script {
+                sendSlackMessage("""
+                { "text": "*Terraform 배포 실패* :x:\\nJob: ${env.JOB_NAME} #${env.BUILD_NUMBER}" }
+                """)
+            }
+        }
+    }
+}
+
+def sendSlackMessage(String message) {
+    sh """
+        curl -X POST -H 'Content-type: application/json' --data '${message.replace("'", "'\\''")}' ${SLACK_WEBHOOK_URL}
+    """
 }
