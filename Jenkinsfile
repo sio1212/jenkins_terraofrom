@@ -11,8 +11,9 @@ pipeline {
         AWS_REGION = "${params.awsRegion}"
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
-        SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+        FLASK_URL = "http://54.180.158.54:5000/send/slack/message"
     }
+
     stages {
         stage('Plan') {
             steps {
@@ -36,61 +37,11 @@ pipeline {
             }
             steps {
                 script {
-                    def slackMessage = """
-                    {
-                      "blocks": [
-                        {
-                          "type": "section",
-                          "text": {
-                            "type": "mrkdwn",
-                            "text": "*[Terraform 배포 승인 요청]*"
-                          }
-                        },
-                        {
-                          "type": "actions",
-                          "elements": [
-                            {
-                              "type": "button",
-                              "text": {
-                                "type": "plain_text",
-                                "text": "승인"
-                              },
-                              "style": "primary",
-                              "value": "approve_${env.BUILD_NUMBER}",
-                              "action_id": "approve_action"
-                            },
-                            {
-                              "type": "button",
-                              "text": {
-                                "type": "plain_text",
-                                "text": "거절"
-                              },
-                              "style": "danger",
-                              "value": "reject_${env.BUILD_NUMBER}",
-                              "action_id": "reject_action"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                    """
                     sh """
-                    curl -X POST -H 'Content-type: application/json' --data '${slackMessage}' ${SLACK_WEBHOOK_URL}
+                    curl -X POST -H 'Content-Type: application/json' \
+                    -d '{"build_number": "${env.BUILD_NUMBER}"}' \
+                    ${FLASK_URL}
                     """
-                }
-            }
-        }
-
-        stage('Approval') {
-            when {
-                expression { !params.autoApprove }
-            }
-            steps {
-                script {
-                    def userInput = input message: "승인 또는 거절을 선택하세요", parameters: [choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform 실행 여부')]
-                    if (userInput == '거절') {
-                        error("사용자 거절로 배포 중단")
-                    }
                 }
             }
         }
