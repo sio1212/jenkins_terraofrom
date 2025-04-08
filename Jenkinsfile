@@ -34,35 +34,9 @@ pipeline {
             }
         }
 
-        stage('Drift Check') {
-            steps {
-                script {
-                    def driftStatus = sh(script: '''
-                        set +e
-                        driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json://drift_report.json
-                        DRIFT_STATUS=$?
-                        set -e
-                        echo $DRIFT_STATUS
-                    ''', returnStdout: true).trim()
-
-                    if (driftStatus == '2') {
-                        echo "No tfstate file found. Skipping Drift check and proceeding with deployment."
-                    } else if (driftStatus != '0') {
-                        echo "🚨 Driftctl 실행 오류 발생! 배포 중지"
-                        currentBuild.result = 'FAILURE'
-                        error("Driftctl failed to scan properly")
-                    } else {
-                        echo "Drift check passed. Proceeding with deployment."
-                        def driftResult = readFile('drift_report.json')
-                        echo "Drift Check Summary: ${driftResult}"
-                    }
-                }
-            }
-        }
-
         stage('Slack Notification for Approval') {
             when {
-                expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
+                expression { !params.autoApprove }
             }
             steps {
                 script {
@@ -114,19 +88,21 @@ pipeline {
             }
         }
 
-        stage('Approval') {
+        stage('Approval Wait') {
             when {
-                expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
+                expression { !params.autoApprove }
             }
             steps {
                 script {
-                    def userInput = input message: "Drift detected! Review and approve before proceeding.",
-                          parameters: [
-                              choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform Apply 실행 여부')
-                          ]
+                    timeout(time: 15, unit: 'MINUTES') {
+                        waitUntil {
+                            fileExists("approval_${env.BUILD_NUMBER}.txt")
+                        }
+                    }
 
-                    if (userInput == '거절') {
-                        error("🚨 사용자가 배포를 거절했습니다. 종료합니다.")
+                    def approvalResult = readFile("approval_${env.BUILD_NUMBER}.txt").trim()
+                    if (approvalResult == 'reject') {
+                        error("🚨 사용자가 배포 거절했습니다. 종료합니다.")
                     } else {
                         echo "✅ 승인 완료! Terraform Apply 진행"
                     }
@@ -135,7 +111,7 @@ pipeline {
         }
 
         stage('Apply') {
-            when { expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') } }
+            when { expression { !params.isDestroy && (params.autoApprove || fileExists("approval_${env.BUILD_NUMBER}.txt")) } }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
