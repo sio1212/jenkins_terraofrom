@@ -12,8 +12,8 @@ pipeline {
         AWS_REGION = "${params.awsRegion}"
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
-        SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/여기에_슬랙_웹훅_URL"
-        FLASK_API_URL = "http://YOUR_FLASK_SERVER_IP:5000/slack/deploy"
+        SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+        FLASK_API_URL = "http://54.180.158.54:5000/slack/deploy"
     }
 
     stages {
