@@ -52,8 +52,8 @@ pipeline {
             }
             steps {
                 script {
-                    timeout(time: 1, unit: 'HOURS') {  // 최대 대기시간 1시간
-                        input message: "Terraform 배포 승인 대기중...", ok: "승인"
+                    timeout(time: 1, unit: 'HOURS') {
+                        input id: 'Proceed', message: "Terraform 배포 승인 대기중...", ok: "승인"
                     }
                 }
             }
@@ -61,7 +61,7 @@ pipeline {
 
         stage('Apply') {
             when {
-                expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') }
+                expression { !params.isDestroy }
             }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
