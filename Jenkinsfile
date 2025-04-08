@@ -11,15 +11,24 @@ pipeline {
         AWS_REGION = "${params.awsRegion}"
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
+        DYNAMODB_TABLE = "jgt-terraform-lock"
         FLASK_URL = "http://54.180.158.54:5000/send/slack/message"
     }
 
     stages {
-        stage('Plan') {
+        stage('Terraform Init & Plan') {
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    sh 'terraform init -upgrade'
-                    sh 'terraform validate'
+                    sh """
+                    terraform init -backend-config="bucket=${S3_BUCKET}" \
+                                   -backend-config="key=${TF_STATE_KEY}" \
+                                   -backend-config="region=${AWS_REGION}" \
+                                   -backend-config="encrypt=true" \
+                                   -upgrade
+
+                    terraform validate
+                    """
+
                     script {
                         if (params.isDestroy) {
                             sh 'terraform plan -destroy -out=tfplan'
@@ -59,22 +68,24 @@ pipeline {
             }
         }
 
-        stage('Apply') {
+        stage('Terraform Apply') {
             when {
                 expression { !params.isDestroy }
             }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    sh "terraform apply -auto-approve tfplan"
+                    sh 'terraform apply -auto-approve tfplan'
                 }
             }
         }
 
-        stage('Destroy') {
-            when { expression { params.isDestroy } }
+        stage('Terraform Destroy') {
+            when {
+                expression { params.isDestroy }
+            }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
-                    sh "terraform destroy -auto-approve"
+                    sh 'terraform destroy -auto-approve'
                 }
             }
         }
