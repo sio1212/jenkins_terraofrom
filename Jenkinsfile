@@ -34,59 +34,59 @@ pipeline {
             }
         }
 
-        stage('Slack Notification for Approval') {
-            when {
-                expression { !params.autoApprove }
-            }
-            steps {
-                script {
-                    def buildNumber = env.BUILD_NUMBER
-                    def approveUrl = "${FLASK_API_URL}?action=approve&build_number=${buildNumber}"
-                    def rejectUrl = "${FLASK_API_URL}?action=reject&build_number=${buildNumber}"
+ stage('Slack Notification for Approval') {
+    when {
+        expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
+    }
+    steps {
+        script {
+            def buildNumber = env.BUILD_NUMBER
+            def approveUrl = "${FLASK_API_URL}?action=approve&build_number=${buildNumber}"
+            def rejectUrl = "${FLASK_API_URL}?action=reject&build_number=${buildNumber}"
 
-                    def slackMessage = """
+            def slackMessage = """
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*[Terraform 배포 승인 요청]*"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
                     {
-                      "blocks": [
-                        {
-                          "type": "section",
-                          "text": {
-                            "type": "mrkdwn",
-                            "text": "*[Terraform 배포 승인 요청]*"
-                          }
-                        },
-                        {
-                          "type": "actions",
-                          "elements": [
-                            {
-                              "type": "button",
-                              "text": {
-                                "type": "plain_text",
-                                "text": "승인"
-                              },
-                              "style": "primary",
-                              "url": "${approveUrl}"
-                            },
-                            {
-                              "type": "button",
-                              "text": {
-                                "type": "plain_text",
-                                "text": "거절"
-                              },
-                              "style": "danger",
-                              "url": "${rejectUrl}"
-                            }
-                          ]
-                        }
-                      ]
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "승인"
+                      },
+                      "style": "primary",
+                      "url": "${approveUrl}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "거절"
+                      },
+                      "style": "danger",
+                      "url": "${rejectUrl}"
                     }
-                    """
-
-                    sh """
-                    curl -X POST -H 'Content-type: application/json' --data '${slackMessage}' ${SLACK_WEBHOOK_URL}
-                    """
+                  ]
                 }
+              ]
             }
+            """
+
+            sh """
+            curl -X POST -H 'Content-type: application/json' --data '${slackMessage}' ${SLACK_WEBHOOK_URL}
+            """
         }
+    }
+}
 
         stage('Approval Wait') {
             when {
