@@ -33,7 +33,7 @@ pipeline {
 
         stage('Slack Notification for Approval') {
             when {
-                expression { !params.autoApprove }
+                expression { !params.autoApprove && !params.isDestroy }
             }
             steps {
                 script {
@@ -42,6 +42,19 @@ pipeline {
                     -d '{"build_number": "${env.BUILD_NUMBER}"}' \
                     ${FLASK_URL}
                     """
+                }
+            }
+        }
+
+        stage('Approval') {
+            when {
+                expression { !params.autoApprove && !params.isDestroy }
+            }
+            steps {
+                script {
+                    timeout(time: 1, unit: 'HOURS') {  // 최대 대기시간 1시간
+                        input message: "Terraform 배포 승인 대기중...", ok: "승인"
+                    }
                 }
             }
         }
