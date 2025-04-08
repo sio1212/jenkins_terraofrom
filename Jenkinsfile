@@ -8,24 +8,26 @@ pipeline {
     }
 
     environment {
-        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"  
-        AWS_REGION = "${params.awsRegion}"  
+        PATH = "/usr/bin:/usr/local/bin:/opt/terraform:/bin"
+        AWS_REGION = "${params.awsRegion}"
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
+        SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/여기에_슬랙_웹훅_URL"
+        FLASK_API_URL = "http://YOUR_FLASK_SERVER_IP:5000/slack/deploy"
     }
 
     stages {
         stage('Plan') {
             steps {
-                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {  
-                    sh 'terraform init -upgrade'  
-                    sh 'terraform validate'  
+                withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
+                    sh 'terraform init -upgrade'
+                    sh 'terraform validate'
 
-                    script {  
-                        if (params.isDestroy) {  
-                            sh 'terraform plan -destroy -out=tfplan'  
+                    script {
+                        if (params.isDestroy) {
+                            sh 'terraform plan -destroy -out=tfplan'
                         } else {
-                            sh 'terraform plan -out=tfplan'  
+                            sh 'terraform plan -out=tfplan'
                         }
                     }
                 }
@@ -37,14 +39,12 @@ pipeline {
                 script {
                     def driftStatus = sh(script: '''
                         set +e
-                        # driftctl scan to check if state exists in S3
                         driftctl scan --from tfstate+s3://$S3_BUCKET/$TF_STATE_KEY --output json://drift_report.json
                         DRIFT_STATUS=$?
                         set -e
                         echo $DRIFT_STATUS
                     ''', returnStdout: true).trim()
 
-                    // If Drift status is 2, it means no state file was found, so we skip drift check
                     if (driftStatus == '2') {
                         echo "No tfstate file found. Skipping Drift check and proceeding with deployment."
                     } else if (driftStatus != '0') {
@@ -60,17 +60,71 @@ pipeline {
             }
         }
 
-        stage('Approval') {
-            when { 
+        stage('Slack Notification for Approval') {
+            when {
                 expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
             }
             steps {
                 script {
-                    def userInput = input message: "Drift detected! Review and approve before proceeding.",  
+                    def buildNumber = env.BUILD_NUMBER
+                    def approveUrl = "${FLASK_API_URL}?action=approve&build_number=${buildNumber}"
+                    def rejectUrl = "${FLASK_API_URL}?action=reject&build_number=${buildNumber}"
+
+                    def slackMessage = """
+                    {
+                      "blocks": [
+                        {
+                          "type": "section",
+                          "text": {
+                            "type": "mrkdwn",
+                            "text": "*[Terraform 배포 승인 요청]*"
+                          }
+                        },
+                        {
+                          "type": "actions",
+                          "elements": [
+                            {
+                              "type": "button",
+                              "text": {
+                                "type": "plain_text",
+                                "text": "승인"
+                              },
+                              "style": "primary",
+                              "url": "${approveUrl}"
+                            },
+                            {
+                              "type": "button",
+                              "text": {
+                                "type": "plain_text",
+                                "text": "거절"
+                              },
+                              "style": "danger",
+                              "url": "${rejectUrl}"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    """
+
+                    sh """
+                    curl -X POST -H 'Content-type: application/json' --data '${slackMessage}' ${SLACK_WEBHOOK_URL}
+                    """
+                }
+            }
+        }
+
+        stage('Approval') {
+            when {
+                expression { currentBuild.result == 'UNSTABLE' && !params.autoApprove }
+            }
+            steps {
+                script {
+                    def userInput = input message: "Drift detected! Review and approve before proceeding.",
                           parameters: [
                               choice(name: 'APPLY_ACTION', choices: ['승인', '거절'], description: 'Terraform Apply 실행 여부')
                           ]
-                    
+
                     if (userInput == '거절') {
                         error("🚨 사용자가 배포를 거절했습니다. 종료합니다.")
                     } else {
@@ -81,7 +135,7 @@ pipeline {
         }
 
         stage('Apply') {
-            when { expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') } }  
+            when { expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') } }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
@@ -93,7 +147,7 @@ pipeline {
         }
 
         stage('Destroy') {
-            when { expression { params.isDestroy } }  
+            when { expression { params.isDestroy } }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     script {
