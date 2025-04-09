@@ -12,7 +12,7 @@ pipeline {
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
         DYNAMODB_TABLE = "jgt-terraform-lock"
-        FLASK_URL = "http://54.180.158.54:5000/send/slack/message"
+        FLASK_URL = "http://52.79.217.71:5000/send/slack/message"
     }
 
     stages {
