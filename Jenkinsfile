@@ -36,6 +36,11 @@ pipeline {
                             sh 'terraform plan -out=tfplan'
                         }
                     }
+
+                    // plan 결과 저장
+                    script {
+                        env.TF_OUTPUT = sh(script: "terraform show -no-color tfplan", returnStdout: true).trim()
+                    }
                 }
             }
         }
@@ -46,9 +51,15 @@ pipeline {
             }
             steps {
                 script {
+                    def payload = [
+                        build_number: env.BUILD_NUMBER,
+                        plan_output : env.TF_OUTPUT.take(2900)  // Slack 제한 대비
+                    ]
+                    writeFile file: 'payload.json', text: groovy.json.JsonOutput.toJson(payload)
+
                     sh """
                     curl -X POST -H 'Content-Type: application/json' \
-                    -d '{"build_number": "${env.BUILD_NUMBER}"}' \
+                    --data @payload.json \
                     ${FLASK_URL}
                     """
                 }
