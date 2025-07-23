@@ -11,11 +11,17 @@ pipeline {
         AWS_REGION = "${params.awsRegion}"
         S3_BUCKET = "jgt-terraform-state"
         TF_STATE_KEY = "demo/terraform.tfstate"
-        FLASK_URL = "http://52.79.217.71:5000/send/slack/message"
+        SONARQUBE_ENV = "sonarqube"  // Jenkins에서 등록한 SonarQube 이름
     }
 
     stages {
-        stage('Plan') {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/sio1212/jenkins_terraofrom.git', branch: 'main'
+            }
+        }
+
+        stage('Terraform Plan') {
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     sh 'terraform init -upgrade'
@@ -31,24 +37,20 @@ pipeline {
             }
         }
 
-        stage('Slack Notification for Approval') {
+        stage('SonarQube Scan') {
             when {
-                expression { !params.autoApprove }
+                expression { !params.isDestroy }
             }
             steps {
-                script {
-                    sh """
-                    curl -X POST -H 'Content-Type: application/json' \
-                    -d '{"build_number": "${env.BUILD_NUMBER}"}' \
-                    ${FLASK_URL}
-                    """
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh "mvn clean verify sonar:sonar"
                 }
             }
         }
 
-        stage('Apply') {
+        stage('Terraform Apply') {
             when {
-                expression { !params.isDestroy && (params.autoApprove || currentBuild.result != 'UNSTABLE') }
+                expression { !params.isDestroy && params.autoApprove }
             }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
@@ -57,8 +59,10 @@ pipeline {
             }
         }
 
-        stage('Destroy') {
-            when { expression { params.isDestroy } }
+        stage('Terraform Destroy') {
+            when {
+                expression { params.isDestroy }
+            }
             steps {
                 withAWS(credentials: 'aws-access-key-id', region: "${params.awsRegion}") {
                     sh "terraform destroy -auto-approve"
