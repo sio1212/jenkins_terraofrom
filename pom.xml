@@ -9,7 +9,7 @@
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
-  <name>Java 17 Project</name>
+  <name>Terraform</name>
   <description>Sample Maven project using Java 17</description>
 
   <properties>
